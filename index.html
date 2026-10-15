@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Study Quest</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; min-height: 100vh; background: linear-gradient(135deg,#102a43,#0b7285); }
+    main { max-width: 46rem; margin: 0 auto; padding: 3rem 1.5rem; }
+    .card { background: #081c2ce6; padding: 1.5rem; border-radius: 1rem; margin: 1rem 0; }
+    form { display: grid; gap: .8rem; }
+    input, button { font: inherit; padding: .8rem; border: 1px solid #ffffff40; border-radius: .5rem; }
+    button { cursor: pointer; background: #63e6be; color: #081c2c; font-weight: 700; }
+    li { display: flex; align-items: center; gap: .8rem; padding: 1rem 0; border-bottom: 1px solid #ffffff20; }
+    ul { list-style: none; padding: 0; }
+    small { display: block; color: #adc6d6; }
+    .done { text-decoration: line-through; opacity: .6; }
+    #status { min-height: 1.5rem; color: #ffe49c; }
+    a { color: #63e6be; }
+  </style>
+</head>
+<body>
+<main>
+  <h1 id="app-name">Study Quest</h1>
+  <p id="app-message">Turn study goals into completed quests.</p>
+  <section class="card">
+    <h2>New quest</h2>
+    <form id="quest-form">
+      <label>Study goal <input name="title" placeholder="Build my first multi-container app" maxlength="120" required></label>
+      <label>Subject <input name="subject" placeholder="Docker" maxlength="60" required></label>
+      <button type="submit">Add quest</button>
+    </form>
+  </section>
+  <section class="card">
+    <h2>Your quests <small id="progress"></small></h2>
+    <ul id="quests"></ul>
+    <button id="refresh" type="button">Refresh</button>
+  </section>
+  <p id="status" role="status"></p>
+  <p><a href="/api/quests">JSON API</a> · <a href="/health">Health</a></p>
+</main>
+<script>
+  const status = document.querySelector('#status');
+  async function api(path, options = {}) {
+    const response = await fetch(path, options);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Request failed');
+    return data;
+  }
+  async function load() {
+    const { quests } = await api('/api/quests');
+    const list = document.querySelector('#quests');
+    list.replaceChildren();
+    document.querySelector('#progress').textContent = `${quests.filter(q => q.completed).length} / ${quests.length} completed`;
+    if (!quests.length) list.textContent = 'No quests yet. Add your first study goal!';
+    for (const quest of quests) {
+      const item = document.createElement('li');
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = quest.completed;
+      checkbox.setAttribute('aria-label', `Complete ${quest.title}`);
+      const label = document.createElement('span');
+      label.textContent = quest.title;
+      if (quest.completed) label.className = 'done';
+      const subject = document.createElement('small');
+      subject.textContent = quest.subject;
+      label.append(subject);
+      checkbox.addEventListener('change', () => run(async () => {
+        checkbox.disabled = true;
+        try {
+          await api(`/api/quests/${quest.id}`, {
+            method: 'PATCH', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({completed: checkbox.checked})
+          });
+          await load();
+        } catch (error) {
+          checkbox.checked = quest.completed;
+          checkbox.disabled = false;
+          throw error;
+        }
+      }));
+      item.append(checkbox, label);
+      list.append(item);
+    }
+  }
+  async function run(action) {
+    status.textContent = '';
+    try { await action(); } catch (error) { status.textContent = error.message; }
+  }
+  document.querySelector('#quest-form').addEventListener('submit', event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const button = form.querySelector('button');
+    run(async () => {
+      button.disabled = true;
+      try {
+        await api('/api/quests', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(Object.fromEntries(new FormData(form)))
+        });
+        form.reset();
+        await load();
+      } finally { button.disabled = false; }
+    });
+  });
+  document.querySelector('#refresh').addEventListener('click', () => run(load));
+  run(async () => {
+    const info = await api('/api/info');
+    document.title = info.app;
+    document.querySelector('#app-name').textContent = info.app;
+    document.querySelector('#app-message').textContent = info.message;
+    await load();
+  });
+</script>
+</body>
+</html>

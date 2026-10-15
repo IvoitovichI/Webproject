@@ -5,3 +5,10 @@
 __pycache__
 *.py[cod]
 README.md
+.env
+.env.*
+.venv
+venv
+tests
+verify.ps1
+*.log

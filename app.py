@@ -1,113 +1,141 @@
-"""A small dependency-free web application for Docker Fundamentals HW1."""
-
-from __future__ import annotations
-
-import html
+﻿"""Study Quest: a PostgreSQL-backed study-goal tracker."""
 import json
 import os
 import socket
-from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import urlsplit
+
+import psycopg
+from psycopg.rows import dict_row
 
 
-def env_port() -> int:
-    """Read and validate the HTTP port from the environment."""
-    raw_port = os.getenv("PORT", "8080")
-    try:
-        port = int(raw_port)
-    except ValueError as error:
-        raise SystemExit(f"PORT must be an integer, got {raw_port!r}") from error
+def connect():
+    return psycopg.connect(
+        host=os.environ['DB_HOST'], port=os.getenv('DB_PORT', '5432'),
+        dbname=os.environ['DB_NAME'], user=os.environ['DB_USER'],
+        password=os.environ['DB_PASSWORD'], connect_timeout=3,
+        options='-c statement_timeout=5000', row_factory=dict_row,
+    )
 
-    if not 1 <= port <= 65535:
-        raise SystemExit("PORT must be between 1 and 65535")
-    return port
+
+def initialize_database():
+    with connect() as db:
+        db.execute('''CREATE TABLE IF NOT EXISTS quests (
+            id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+            title VARCHAR(120) NOT NULL CHECK (length(trim(title)) > 0),
+            subject VARCHAR(60) NOT NULL CHECK (length(trim(subject)) > 0),
+            completed BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )''')
 
 
 class RequestHandler(BaseHTTPRequestHandler):
-    server_version = "HW1WebApp/1.0"
+    server_version = 'StudyQuest/2.0'
 
-    def send_body(self, status: HTTPStatus, body: bytes, content_type: str) -> None:
+    def send_body(self, status, body, content_type):
         self.send_response(status)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header('Content-Type', content_type)
+        self.send_header('Content-Length', str(len(body)))
+        self.send_header('X-Content-Type-Options', 'nosniff')
         self.end_headers()
         self.wfile.write(body)
 
-    def send_json(self, status: HTTPStatus, payload: dict[str, object]) -> None:
-        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        self.send_body(status, body, "application/json; charset=utf-8")
+    def send_json(self, status, payload):
+        body = json.dumps(payload, ensure_ascii=False, default=str).encode('utf-8')
+        self.send_body(status, body, 'application/json; charset=utf-8')
 
-    def do_GET(self) -> None:  # noqa: N802 - inherited HTTP method name
-        route = self.path.split("?", maxsplit=1)[0]
+    def read_json(self):
+        if self.headers.get_content_type() != 'application/json':
+            raise ValueError('Content-Type must be application/json')
+        length = int(self.headers.get('Content-Length', '0'))
+        if not 1 <= length <= 8192:
+            raise ValueError('JSON body must be between 1 and 8192 bytes')
+        payload = json.loads(self.rfile.read(length))
+        if not isinstance(payload, dict):
+            raise ValueError('JSON body must be an object')
+        return payload
 
-        if route == "/health":
-            self.send_json(HTTPStatus.OK, {"status": "healthy"})
-            return
+    def handle_api(self, method):
+        route = urlsplit(self.path).path
+        try:
+            if method == 'GET' and route == '/':
+                self.send_body(200, Path('index.html').read_bytes(), 'text/html; charset=utf-8')
+                return
+            if method == 'GET' and route == '/api/info':
+                self.send_json(200, {
+                    'app': os.getenv('APP_NAME', 'Study Quest'),
+                    'message': os.getenv('APP_MESSAGE', 'Turn study goals into completed quests.'),
+                    'hostname': socket.gethostname(),
+                })
+                return
+            if method == 'GET' and route == '/health':
+                with connect() as db:
+                    db.execute('SELECT 1')
+                self.send_json(200, {'status': 'healthy', 'database': 'connected'})
+                return
+            if route == '/api/quests' and method == 'GET':
+                with connect() as db:
+                    quests = db.execute('SELECT * FROM quests ORDER BY id DESC').fetchall()
+                self.send_json(200, {'quests': quests})
+                return
+            if route == '/api/quests' and method == 'POST':
+                payload = self.read_json()
+                fields = {}
+                for name, limit in (('title', 120), ('subject', 60)):
+                    value = payload.get(name)
+                    if not isinstance(value, str) or not 1 <= len(value.strip()) <= limit:
+                        raise ValueError(f'{name} must contain 1 to {limit} characters')
+                    fields[name] = value.strip()
+                with connect() as db:
+                    quest = db.execute(
+                        'INSERT INTO quests (title, subject) VALUES (%s, %s) RETURNING *',
+                        (fields['title'], fields['subject']),
+                    ).fetchone()
+                self.send_json(201, quest)
+                return
+            parts = route.strip('/').split('/')
+            if len(parts) == 3 and parts[:2] == ['api', 'quests'] and method == 'PATCH':
+                if not parts[2].isascii() or not parts[2].isdigit() or not 1 <= int(parts[2]) <= 9223372036854775807:
+                    raise ValueError('Quest id must be a positive 64-bit integer')
+                payload = self.read_json()
+                if type(payload.get('completed')) is not bool:
+                    raise ValueError('completed must be a boolean')
+                with connect() as db:
+                    quest = db.execute(
+                        'UPDATE quests SET completed = %s WHERE id = %s RETURNING *',
+                        (payload['completed'], int(parts[2])),
+                    ).fetchone()
+                self.send_json(200 if quest else 404, quest or {'error': 'Quest not found'})
+                return
+            self.send_json(404, {'error': 'Not found'})
+        except (ValueError, UnicodeDecodeError) as error:
+            self.send_json(400, {'error': str(error)})
+        except psycopg.Error:
+            # Never expose credentials or database connection details.
+            self.send_json(503, {'error': 'Database temporarily unavailable'})
 
-        if route == "/api/info":
-            self.send_json(
-                HTTPStatus.OK,
-                {
-                    "app": os.getenv("APP_NAME", "Docker Fundamentals"),
-                    "message": os.getenv(
-                        "APP_MESSAGE", "The application is running in a container."
-                    ),
-                    "hostname": socket.gethostname(),
-                },
-            )
-            return
+    def do_GET(self):
+        self.handle_api('GET')
 
-        if route != "/":
-            self.send_json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
-            return
+    def do_POST(self):
+        self.handle_api('POST')
 
-        app_name = html.escape(os.getenv("APP_NAME", "Docker Fundamentals"))
-        message = html.escape(
-            os.getenv("APP_MESSAGE", "The application is running in a container.")
-        )
-        hostname = html.escape(socket.gethostname())
-        page = f"""<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{app_name}</title>
-  <style>
-    :root {{ color-scheme: dark; font-family: system-ui, sans-serif; }}
-    body {{ margin: 0; min-height: 100vh; display: grid; place-items: center;
-            background: linear-gradient(135deg, #102a43, #0b7285); }}
-    main {{ width: min(38rem, calc(100% - 3rem)); padding: 2.5rem;
-            border: 1px solid #ffffff30; border-radius: 1rem;
-            background: #081c2ccc; box-shadow: 0 1.5rem 4rem #0006; }}
-    .status {{ color: #63e6be; font-weight: 700; }}
-    code {{ padding: .2rem .45rem; border-radius: .3rem; background: #ffffff14; }}
-  </style>
-</head>
-<body>
-  <main>
-    <p class="status">● Container is healthy</p>
-    <h1>{app_name}</h1>
-    <p>{message}</p>
-    <p>Served by host <code>{hostname}</code>.</p>
-    <p>Try <a href="/api/info">/api/info</a> or <a href="/health">/health</a>.</p>
-  </main>
-</body>
-</html>
-"""
-        self.send_body(
-            HTTPStatus.OK, page.encode("utf-8"), "text/html; charset=utf-8"
-        )
-
-    def log_message(self, format: str, *args: object) -> None:
-        print(f"{self.address_string()} - {format % args}", flush=True)
+    def do_PATCH(self):
+        self.handle_api('PATCH')
 
 
-def main() -> None:
-    host = os.getenv("HOST", "0.0.0.0")
-    port = env_port()
+def main():
+    port = int(os.getenv('PORT', '8080'))
+    if not 1 <= port <= 65535:
+        raise SystemExit('PORT must be between 1 and 65535')
+    try:
+        initialize_database()
+    except psycopg.Error:
+        raise SystemExit('Database initialization failed; check configuration and readiness.') from None
+    host = os.getenv('HOST', '0.0.0.0')
     server = ThreadingHTTPServer((host, port), RequestHandler)
-    print(f"Listening on http://{host}:{port}", flush=True)
+    print(f'Listening on http://{host}:{port}', flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -116,5 +144,5 @@ def main() -> None:
         server.server_close()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
