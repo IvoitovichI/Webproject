@@ -3,6 +3,10 @@
 A study-goal tracker: add quests, list them, and mark them complete. The Python
 backend reads and writes PostgreSQL data; the browser page uses the same JSON API.
 
+Complete endpoint reference and Postman instructions: [API.md](API.md).
+Importable requests and automated assertions:
+[Postman Collection](postman/StudyQuest.postman_collection.json).
+
 ## Start
 
 Start Docker Desktop (Linux containers) and open a terminal **in the inner
@@ -56,6 +60,12 @@ Invoke-RestMethod http://localhost:8080/api/quests | ConvertTo-Json -Depth 5
 # Update the saved goal (HTTP 200).
 Invoke-RestMethod "http://localhost:8080/api/quests/$($quest.id)" -Method Patch -ContentType 'application/json' -Body '{"completed":true}'
 
+# Get one goal by ID (HTTP 200).
+Invoke-RestMethod "http://localhost:8080/api/quests/$($quest.id)"
+
+# Delete that goal (HTTP 200); subsequent reads return 404.
+Invoke-RestMethod "http://localhost:8080/api/quests/$($quest.id)" -Method Delete
+
 Invoke-RestMethod http://localhost:8080/health
 ```
 
@@ -87,7 +97,8 @@ powershell -ExecutionPolicy Bypass -File .\verify.ps1
 ```
 
 The script creates one demonstration quest, checks invalid inputs, recreates the
-containers with `down` / `up`, and verifies the saved quest. It leaves the app running.
+containers with `down` / `up`, verifies the saved quest, then deletes that test quest
+and checks the resulting 404 responses. It leaves the app running.
 
 ```cmd
 docker compose ps

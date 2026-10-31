@@ -1,0 +1,11 @@
+$kind: http-request
+description: 03 - Application info
+url: "{{baseUrl}}/api/info"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("HTTP 200", function () { pm.response.to.have.status(200); });
+      pm.test("Configured app", function () { pm.expect(pm.response.json().app).to.be.a("string").and.not.empty; });
+    language: text/javascript
+order: 3000

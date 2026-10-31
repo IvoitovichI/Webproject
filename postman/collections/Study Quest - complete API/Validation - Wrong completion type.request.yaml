@@ -1,0 +1,16 @@
+$kind: http-request
+description: Validation - Wrong completion type
+url: "{{baseUrl}}/api/quests/{{questId}}"
+method: PATCH
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: '{"completed": "yes"}'
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("HTTP 400", function () { pm.response.to.have.status(400); });
+      pm.test("Error message", function () { pm.expect(pm.response.json().error).to.be.a("string"); });
+    language: text/javascript
+order: 13000

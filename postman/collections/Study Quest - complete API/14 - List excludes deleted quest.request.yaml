@@ -1,0 +1,11 @@
+$kind: http-request
+description: 14 - List excludes deleted quest
+url: "{{baseUrl}}/api/quests"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("HTTP 200", function () { pm.response.to.have.status(200); });
+      pm.test("Deleted quest absent", function () { pm.expect(pm.response.json().quests.some(q => String(q.id) === pm.collectionVariables.get("questId"))).to.eql(false); });
+    language: text/javascript
+order: 20000

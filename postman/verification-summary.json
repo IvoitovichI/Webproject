@@ -1,0 +1,22 @@
+﻿{
+    "verifiedOn":  "2026-10-28",
+    "baseUrl":  "http://localhost:8080",
+    "runner":  "Newman",
+    "collection":  "Study Quest - complete API",
+    "requests":  {
+                     "total":  21,
+                     "pending":  0,
+                     "failed":  0
+                 },
+    "assertions":  {
+                       "total":  38,
+                       "pending":  0,
+                       "failed":  0
+                   },
+    "failureCount":  0,
+    "desktopHealth":  {
+                          "status":  "healthy",
+                          "database":  "connected",
+                          "statusCode":  200
+                      }
+}

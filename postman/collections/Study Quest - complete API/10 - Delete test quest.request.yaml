@@ -1,0 +1,11 @@
+$kind: http-request
+description: 10 - Delete test quest
+url: "{{baseUrl}}/api/quests/{{questId}}"
+method: DELETE
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("HTTP 200", function () { pm.response.to.have.status(200); });
+      pm.test("Deleted own quest", function () { pm.expect(String(pm.response.json().id)).to.eql(pm.collectionVariables.get("questId")); });
+    language: text/javascript
+order: 16000

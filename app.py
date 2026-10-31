@@ -69,6 +69,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                     'hostname': socket.gethostname(),
                 })
                 return
+            if method == 'GET' and route == '/Test':
+                self.send_json(200,{
+                    'title': 'New page',
+                    'message':'I get it'
+                })
+                return
             if method == 'GET' and route == '/health':
                 with connect() as db:
                     db.execute('SELECT 1')
@@ -95,16 +101,25 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self.send_json(201, quest)
                 return
             parts = route.strip('/').split('/')
-            if len(parts) == 3 and parts[:2] == ['api', 'quests'] and method == 'PATCH':
+            if len(parts) == 3 and parts[:2] == ['api', 'quests'] and method in ('GET', 'PATCH', 'DELETE'):
                 if not parts[2].isascii() or not parts[2].isdigit() or not 1 <= int(parts[2]) <= 9223372036854775807:
                     raise ValueError('Quest id must be a positive 64-bit integer')
+                quest_id = int(parts[2])
+                if method in ('GET', 'DELETE'):
+                    with connect() as db:
+                        if method == 'GET':
+                            quest = db.execute('SELECT * FROM quests WHERE id = %s', (quest_id,)).fetchone()
+                        else:
+                            quest = db.execute('DELETE FROM quests WHERE id = %s RETURNING *', (quest_id,)).fetchone()
+                    self.send_json(200 if quest else 404, quest or {'error': 'Quest not found'})
+                    return
                 payload = self.read_json()
                 if type(payload.get('completed')) is not bool:
                     raise ValueError('completed must be a boolean')
                 with connect() as db:
                     quest = db.execute(
                         'UPDATE quests SET completed = %s WHERE id = %s RETURNING *',
-                        (payload['completed'], int(parts[2])),
+                        (payload['completed'], quest_id),
                     ).fetchone()
                 self.send_json(200 if quest else 404, quest or {'error': 'Quest not found'})
                 return
@@ -112,7 +127,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         except (ValueError, UnicodeDecodeError) as error:
             self.send_json(400, {'error': str(error)})
         except psycopg.Error:
-            # Never expose credentials or database connection details.
+           
             self.send_json(503, {'error': 'Database temporarily unavailable'})
 
     def do_GET(self):
@@ -123,6 +138,9 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def do_PATCH(self):
         self.handle_api('PATCH')
+
+    def do_DELETE(self):
+        self.handle_api('DELETE')
 
 
 def main():

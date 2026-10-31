@@ -1,0 +1,11 @@
+$kind: http-request
+description: Validation - Invalid delete ID
+url: "{{baseUrl}}/api/quests/not-a-number"
+method: DELETE
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("HTTP 400", function () { pm.response.to.have.status(400); });
+      pm.test("Error message", function () { pm.expect(pm.response.json().error).to.be.a("string"); });
+    language: text/javascript
+order: 15000

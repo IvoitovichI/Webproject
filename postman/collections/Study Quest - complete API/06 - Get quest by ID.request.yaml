@@ -1,0 +1,11 @@
+$kind: http-request
+description: 06 - Get quest by ID
+url: "{{baseUrl}}/api/quests/{{questId}}"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("HTTP 200", function () { pm.response.to.have.status(200); });
+      pm.test("Same quest", function () { pm.expect(String(pm.response.json().id)).to.eql(pm.collectionVariables.get("questId")); pm.expect(pm.response.json().title).to.eql(pm.collectionVariables.get("testTitle")); });
+    language: text/javascript
+order: 6000

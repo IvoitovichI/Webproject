@@ -1,0 +1,6 @@
+$kind: collection
+description: Run the entire collection in order against the running Study Quest app. Creates and deletes only its own test quest. baseUrl defaults to localhost:8080; override for APP_PORT. questId is saved automatically after creation. Includes every endpoint and validation checks.
+variables:
+  baseUrl: http://localhost:8080
+  questId: ""
+  testTitle: ""

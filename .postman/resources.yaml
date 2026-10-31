@@ -1,0 +1,15 @@
+# Use this workspace to collaborate
+workspace:
+  id: f0c345ce-a4eb-4dce-8eef-7fcb964d650b
+
+# Each entry here maps a local resource to one or more corresponding objects in Postman Cloud
+
+cloudResources:
+  collections:
+    ../postman/collections/Study Quest - complete API: dc104f39-8e89-44b5-ad41-fa70e150ee81
+
+# All resources in the `postman/` folder are automatically registered in Local View.
+# Point to additional files outside the `postman/` folder to register them individually. Example:
+#localResources:
+#  collections:
+#    - ../tests/E2E Test Collection/

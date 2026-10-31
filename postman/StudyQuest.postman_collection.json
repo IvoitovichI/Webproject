@@ -1,0 +1,562 @@
+{
+  "info": {
+    "name": "Study Quest - complete API",
+    "_postman_id": "c1e37e0a-0e86-4c30-9f87-71c2caec5d82",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Run the entire collection in order against the running Study Quest app. Creates and deletes only its own test quest. baseUrl defaults to localhost:8080; override for APP_PORT. questId is saved automatically after creation. Includes every endpoint and validation checks."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Browser page",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/",
+        "description": "01 - Browser page"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Study Quest form\", function () { pm.expect(pm.response.text()).to.include(\"quest-form\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Database health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/health",
+        "description": "02 - Database health"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Database connected\", function () { pm.expect(pm.response.json().database).to.eql(\"connected\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Application info",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/info",
+        "description": "03 - Application info"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Configured app\", function () { pm.expect(pm.response.json().app).to.be.a(\"string\").and.not.empty; });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - List quests",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/quests",
+        "description": "04 - List quests"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Quests array\", function () { pm.expect(pm.response.json().quests).to.be.an(\"array\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Create test quest",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/quests",
+        "description": "05 - Create test quest",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"title\": \"{{testTitle}}\", \"subject\": \"Postman verification\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.unset(\"questId\");",
+              "pm.collectionVariables.set(\"testTitle\", \"Postman quest \" + pm.variables.replaceIn(\"{{$guid}}\"));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+              "pm.test(\"Created quest fields\", function () { const q = pm.response.json(); pm.expect(q.id).to.be.a(\"number\").above(0); pm.expect(q.title).to.eql(pm.collectionVariables.get(\"testTitle\")); pm.expect(q.subject).to.eql(\"Postman verification\"); pm.expect(q.completed).to.eql(false); pm.expect(q.created_at).to.be.a(\"string\"); pm.collectionVariables.set(\"questId\", String(q.id)); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Get quest by ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/quests/{{questId}}",
+        "description": "06 - Get quest by ID"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Same quest\", function () { pm.expect(String(pm.response.json().id)).to.eql(pm.collectionVariables.get(\"questId\")); pm.expect(pm.response.json().title).to.eql(pm.collectionVariables.get(\"testTitle\")); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - List includes created quest",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/quests",
+        "description": "07 - List includes created quest"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Created quest listed\", function () { pm.expect(pm.response.json().quests.some(q => String(q.id) === pm.collectionVariables.get(\"questId\"))).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 - Update completion",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/quests/{{questId}}",
+        "description": "08 - Update completion",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"completed\": true}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Updated quest\", function () { pm.expect(String(pm.response.json().id)).to.eql(pm.collectionVariables.get(\"questId\")); pm.expect(pm.response.json().completed).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 - Read persisted update",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/quests/{{questId}}",
+        "description": "09 - Read persisted update"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Completion saved\", function () { pm.expect(pm.response.json().completed).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Validation - Blank title",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/quests",
+        "description": "Validation - Blank title",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"title\": \" \", \"subject\": \"Docker\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+              "pm.test(\"Error message\", function () { pm.expect(pm.response.json().error).to.be.a(\"string\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Validation - Missing subject",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/quests",
+        "description": "Validation - Missing subject",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"title\": \"Invalid quest\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+              "pm.test(\"Error message\", function () { pm.expect(pm.response.json().error).to.be.a(\"string\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Validation - Invalid JSON",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/quests",
+        "description": "Validation - Invalid JSON",
+        "body": {
+          "mode": "raw",
+          "raw": "{invalid",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+              "pm.test(\"Error message\", function () { pm.expect(pm.response.json().error).to.be.a(\"string\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Validation - Wrong completion type",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/quests/{{questId}}",
+        "description": "Validation - Wrong completion type",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"completed\": \"yes\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+              "pm.test(\"Error message\", function () { pm.expect(pm.response.json().error).to.be.a(\"string\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Validation - Invalid ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/quests/0",
+        "description": "Validation - Invalid ID"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+              "pm.test(\"Error message\", function () { pm.expect(pm.response.json().error).to.be.a(\"string\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Validation - Invalid delete ID",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": "{{baseUrl}}/api/quests/not-a-number",
+        "description": "Validation - Invalid delete ID"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+              "pm.test(\"Error message\", function () { pm.expect(pm.response.json().error).to.be.a(\"string\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 - Delete test quest",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": "{{baseUrl}}/api/quests/{{questId}}",
+        "description": "10 - Delete test quest"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Deleted own quest\", function () { pm.expect(String(pm.response.json().id)).to.eql(pm.collectionVariables.get(\"questId\")); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 - Deleted quest returns 404",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/quests/{{questId}}",
+        "description": "11 - Deleted quest returns 404"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 - Updating deleted quest returns 404",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/quests/{{questId}}",
+        "description": "12 - Updating deleted quest returns 404",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"completed\": false}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 - Repeated delete returns 404",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": "{{baseUrl}}/api/quests/{{questId}}",
+        "description": "13 - Repeated delete returns 404"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 - List excludes deleted quest",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/quests",
+        "description": "14 - List excludes deleted quest"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Deleted quest absent\", function () { pm.expect(pm.response.json().quests.some(q => String(q.id) === pm.collectionVariables.get(\"questId\"))).to.eql(false); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 - Unknown route",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/unknown",
+        "description": "15 - Unknown route"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

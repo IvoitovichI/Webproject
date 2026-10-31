@@ -1,0 +1,11 @@
+$kind: http-request
+description: 09 - Read persisted update
+url: "{{baseUrl}}/api/quests/{{questId}}"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("HTTP 200", function () { pm.response.to.have.status(200); });
+      pm.test("Completion saved", function () { pm.expect(pm.response.json().completed).to.eql(true); });
+    language: text/javascript
+order: 9000

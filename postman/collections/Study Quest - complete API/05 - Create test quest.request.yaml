@@ -1,0 +1,21 @@
+$kind: http-request
+description: 05 - Create test quest
+url: "{{baseUrl}}/api/quests"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: '{"title": "{{testTitle}}", "subject": "Postman verification"}'
+scripts:
+  - type: beforeRequest
+    code: |-
+      pm.collectionVariables.unset("questId");
+      pm.collectionVariables.set("testTitle", "Postman quest " + pm.variables.replaceIn("{{$guid}}"));
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test("HTTP 201", function () { pm.response.to.have.status(201); });
+      pm.test("Created quest fields", function () { const q = pm.response.json(); pm.expect(q.id).to.be.a("number").above(0); pm.expect(q.title).to.eql(pm.collectionVariables.get("testTitle")); pm.expect(q.subject).to.eql("Postman verification"); pm.expect(q.completed).to.eql(false); pm.expect(q.created_at).to.be.a("string"); pm.collectionVariables.set("questId", String(q.id)); });
+    language: text/javascript
+order: 5000
