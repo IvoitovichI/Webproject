@@ -1,166 +1,300 @@
-﻿"""Study Quest: a PostgreSQL-backed study-goal tracker."""
+"""Study Quest REST API: aiohttp, SQLAlchemy and PostgreSQL/SQLite."""
+import asyncio
 import json
+import logging
 import os
 import socket
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import urlsplit
 
-import psycopg
-from psycopg.rows import dict_row
+from aiohttp import web
+from sqlalchemy import (BigInteger, Boolean, CheckConstraint, Column, DateTime,
+                        ForeignKey, Identity, Integer, MetaData, String, Table,
+                        create_engine, event, inspect, select, text)
+from sqlalchemy.engine import URL
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
-
-def connect():
-    return psycopg.connect(
-        host=os.environ['DB_HOST'], port=os.getenv('DB_PORT', '5432'),
-        dbname=os.environ['DB_NAME'], user=os.environ['DB_USER'],
-        password=os.environ['DB_PASSWORD'], connect_timeout=3,
-        options='-c statement_timeout=5000', row_factory=dict_row,
-    )
+BASE = Path(__file__).resolve().parent
+metadata = MetaData()
 
 
-def initialize_database():
-    with connect() as db:
-        db.execute('''CREATE TABLE IF NOT EXISTS quests (
-            id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-            title VARCHAR(120) NOT NULL CHECK (length(trim(title)) > 0),
-            subject VARCHAR(60) NOT NULL CHECK (length(trim(subject)) > 0),
-            completed BOOLEAN NOT NULL DEFAULT FALSE,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )''')
+def identity():
+    return Column('id', BigInteger().with_variant(Integer, 'sqlite'), Identity(), primary_key=True)
 
 
-class RequestHandler(BaseHTTPRequestHandler):
-    server_version = 'StudyQuest/2.0'
+def timestamp():
+    return Column('created_at', DateTime(timezone=True), nullable=False,
+                  server_default=text('CURRENT_TIMESTAMP'))
 
-    def send_body(self, status, body, content_type):
-        self.send_response(status)
-        self.send_header('Content-Type', content_type)
-        self.send_header('Content-Length', str(len(body)))
-        self.send_header('X-Content-Type-Options', 'nosniff')
-        self.end_headers()
-        self.wfile.write(body)
 
-    def send_json(self, status, payload):
-        body = json.dumps(payload, ensure_ascii=False, default=str).encode('utf-8')
-        self.send_body(status, body, 'application/json; charset=utf-8')
+courses = Table('courses', metadata, identity(),
+                Column('name', String(120), nullable=False),
+                Column('description', String(1000), nullable=False, server_default=''),
+                timestamp(), CheckConstraint('length(trim(name)) BETWEEN 1 AND 120'),
+                CheckConstraint('length(description) <= 1000'))
+quests = Table('quests', metadata, identity(),
+               Column('title', String(120), nullable=False),
+               Column('subject', String(60), nullable=False),
+               Column('completed', Boolean, nullable=False, server_default=text('false')),
+               Column('course_id', BigInteger, ForeignKey('courses.id', ondelete='RESTRICT'), index=True),
+               timestamp(), CheckConstraint('length(trim(title)) BETWEEN 1 AND 120'),
+               CheckConstraint('length(trim(subject)) BETWEEN 1 AND 60'))
+steps = Table('steps', metadata, identity(),
+              Column('quest_id', BigInteger, ForeignKey('quests.id', ondelete='RESTRICT'), nullable=False, index=True),
+              Column('title', String(120), nullable=False),
+              Column('completed', Boolean, nullable=False, server_default=text('false')),
+              timestamp(), CheckConstraint('length(trim(title)) BETWEEN 1 AND 120'))
+TABLES = {'courses': courses, 'quests': quests, 'steps': steps}
+FIELDS = {
+    'courses': {'name': ('text', 120), 'description': ('description', 1000)},
+    'quests': {'title': ('text', 120), 'subject': ('text', 60),
+               'completed': ('bool', None), 'course_id': ('nullable_id', None)},
+    'steps': {'quest_id': ('id', None), 'title': ('text', 120), 'completed': ('bool', None)},
+}
+REQUIRED = {'courses': {'name'}, 'quests': {'title', 'subject'}, 'steps': {'quest_id', 'title'}}
+ENGINE = web.AppKey('engine', object)
 
-    def read_json(self):
-        if self.headers.get_content_type() != 'application/json':
-            raise ValueError('Content-Type must be application/json')
-        length = int(self.headers.get('Content-Length', '0'))
-        if not 1 <= length <= 8192:
-            raise ValueError('JSON body must be between 1 and 8192 bytes')
-        payload = json.loads(self.rfile.read(length))
+
+class APIError(Exception):
+    def __init__(self, status, message):
+        self.status, self.message = status, message
+
+
+def valid_id(value):
+    if type(value) is not int or not 1 <= value <= 9223372036854775807:
+        raise APIError(400, 'IDs must be positive 64-bit integers')
+    return value
+
+
+def path_id(value):
+    if not value.isascii() or not value.isdigit() or len(value) > 19:
+        raise APIError(400, 'IDs must be positive 64-bit integers')
+    return valid_id(int(value))
+
+
+def validate(resource, payload, partial=False):
+    if not isinstance(payload, dict):
+        raise APIError(400, 'JSON body must be an object')
+    rules = FIELDS[resource]
+    if set(payload) - rules.keys():
+        raise APIError(400, 'Unknown or read-only fields: ' + ', '.join(sorted(set(payload) - rules.keys())))
+    if not partial and REQUIRED[resource] - payload.keys():
+        raise APIError(400, 'Missing required fields: ' + ', '.join(sorted(REQUIRED[resource] - payload.keys())))
+    if partial and not payload:
+        raise APIError(400, 'PATCH must contain at least one editable field')
+    result = {}
+    for name, value in payload.items():
+        kind, limit = rules[name]
+        if kind in ('text', 'description'):
+            if not isinstance(value, str) or len(value.strip()) > limit or (kind == 'text' and not value.strip()):
+                raise APIError(400, f'{name} must be a string with {1 if kind == "text" else 0} to {limit} characters')
+            value = value.strip()
+        elif kind == 'bool':
+            if type(value) is not bool:
+                raise APIError(400, f'{name} must be a boolean')
+        elif kind != 'nullable_id' or value is not None:
+            valid_id(value)
+        result[name] = value
+    return result
+
+
+def encode(value):
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=value.tzinfo or timezone.utc).isoformat()
+    raise TypeError(f'Cannot serialize {type(value)}')
+
+
+def response(payload, status=200, headers=None):
+    return web.Response(text=json.dumps(payload, default=encode), status=status,
+                        content_type='application/json', headers=headers)
+
+
+@web.middleware
+async def errors(request, handler):
+    try:
+        return await handler(request)
+    except APIError as error:
+        return response({'error': error.message}, error.status)
+    except web.HTTPException as error:
+        return response({'error': error.reason}, error.status,
+                        {'Allow': error.headers['Allow']} if 'Allow' in error.headers else None)
+    except IntegrityError:
+        return response({'error': 'Relationship constraint failed; remove dependent records before deleting a parent'}, 409)
+    except SQLAlchemyError:
+        logging.exception('Database request failed')
+        return response({'error': 'Database temporarily unavailable'}, 503)
+
+
+async def body(request):
+    if request.content_type != 'application/json':
+        raise APIError(400, 'Content-Type must be application/json')
+    try:
+        return json.loads(await request.text())
+    except (ValueError, UnicodeDecodeError):
+        raise APIError(400, 'Malformed JSON') from None
+
+
+def existing(connection, table, identifier):
+    row = connection.execute(select(table).where(table.c.id == identifier)).mappings().first()
+    if row is None:
+        raise APIError(404, f'{table.name} record not found')
+    return dict(row)
+
+
+def check_references(connection, resource, values):
+    for field, parent in (('course_id', courses), ('quest_id', quests)):
+        if field in values and values[field] is not None:
+            if connection.execute(select(parent.c.id).where(parent.c.id == values[field])).first() is None:
+                raise APIError(400, f'{field} references a missing {parent.name} record')
+
+
+async def crud(request):
+    resource = request.match_info['resource']
+    if resource not in TABLES:
+        raise APIError(404, 'Not found')
+    table = TABLES[resource]
+    identifier = path_id(request.match_info['id']) if 'id' in request.match_info else None
+    if request.query:
+        raise APIError(400, 'Query parameters are not supported')
+    values = validate(resource, await body(request), request.method == 'PATCH') if request.method in ('POST', 'PATCH') else None
+
+    def execute():
+        with request.app[ENGINE].begin() as connection:
+            if identifier is None and request.method == 'GET':
+                return response({resource: [dict(row) for row in connection.execute(select(table).order_by(table.c.id.desc())).mappings()]})
+            if request.method == 'POST':
+                check_references(connection, resource, values)
+                row = dict(connection.execute(table.insert().values(**values).returning(table)).mappings().one())
+                return response(row, 201, {'Location': f'/api/{resource}/{row["id"]}'})
+            row = existing(connection, table, identifier)
+            if request.method == 'GET':
+                return response(row)
+            if request.method == 'PATCH':
+                check_references(connection, resource, values)
+                row = dict(connection.execute(table.update().where(table.c.id == identifier).values(**values).returning(table)).mappings().one())
+                return response(row)
+            if resource == 'courses':
+                children, key = quests, quests.c.course_id
+            elif resource == 'quests':
+                children, key = steps, steps.c.quest_id
+            else:
+                children, key = None, None
+            if children is not None and connection.execute(select(children.c.id).where(key == identifier).limit(1)).first():
+                raise APIError(409, 'Remove or reassign dependent records before deleting this record')
+            connection.execute(table.delete().where(table.c.id == identifier))
+            # Preserve the existing browser/API DELETE contract.
+            return response(row)
+
+    return await asyncio.to_thread(execute)
+
+
+async def related(request):
+    parent = request.match_info['parent']
+    child = request.match_info['child']
+    if (parent, child) not in (('courses', 'quests'), ('quests', 'steps')):
+        raise APIError(404, 'Not found')
+    identifier = path_id(request.match_info['id'])
+    if request.query:
+        raise APIError(400, 'Query parameters are not supported')
+    field = 'course_id' if parent == 'courses' else 'quest_id'
+    values = None
+    if request.method == 'POST':
+        payload = await body(request)
         if not isinstance(payload, dict):
-            raise ValueError('JSON body must be an object')
-        return payload
+            raise APIError(400, 'JSON body must be an object')
+        if field in payload:
+            raise APIError(400, f'{field} is supplied by the URL; omit it from the body')
+        values = validate(child, {**payload, field: identifier})
 
-    def handle_api(self, method):
-        route = urlsplit(self.path).path
-        try:
-            if method == 'GET' and route == '/':
-                self.send_body(200, Path('index.html').read_bytes(), 'text/html; charset=utf-8')
-                return
-            if method == 'GET' and route == '/api/info':
-                self.send_json(200, {
-                    'app': os.getenv('APP_NAME', 'Study Quest'),
-                    'message': os.getenv('APP_MESSAGE', 'Turn study goals into completed quests.'),
-                    'hostname': socket.gethostname(),
-                })
-                return
-            if method == 'GET' and route == '/Test':
-                self.send_json(200,{
-                    'title': 'New page',
-                    'message':'I get it'
-                })
-                return
-            if method == 'GET' and route == '/health':
-                with connect() as db:
-                    db.execute('SELECT 1')
-                self.send_json(200, {'status': 'healthy', 'database': 'connected'})
-                return
-            if route == '/api/quests' and method == 'GET':
-                with connect() as db:
-                    quests = db.execute('SELECT * FROM quests ORDER BY id DESC').fetchall()
-                self.send_json(200, {'quests': quests})
-                return
-            if route == '/api/quests' and method == 'POST':
-                payload = self.read_json()
-                fields = {}
-                for name, limit in (('title', 120), ('subject', 60)):
-                    value = payload.get(name)
-                    if not isinstance(value, str) or not 1 <= len(value.strip()) <= limit:
-                        raise ValueError(f'{name} must contain 1 to {limit} characters')
-                    fields[name] = value.strip()
-                with connect() as db:
-                    quest = db.execute(
-                        'INSERT INTO quests (title, subject) VALUES (%s, %s) RETURNING *',
-                        (fields['title'], fields['subject']),
-                    ).fetchone()
-                self.send_json(201, quest)
-                return
-            parts = route.strip('/').split('/')
-            if len(parts) == 3 and parts[:2] == ['api', 'quests'] and method in ('GET', 'PATCH', 'DELETE'):
-                if not parts[2].isascii() or not parts[2].isdigit() or not 1 <= int(parts[2]) <= 9223372036854775807:
-                    raise ValueError('Quest id must be a positive 64-bit integer')
-                quest_id = int(parts[2])
-                if method in ('GET', 'DELETE'):
-                    with connect() as db:
-                        if method == 'GET':
-                            quest = db.execute('SELECT * FROM quests WHERE id = %s', (quest_id,)).fetchone()
-                        else:
-                            quest = db.execute('DELETE FROM quests WHERE id = %s RETURNING *', (quest_id,)).fetchone()
-                    self.send_json(200 if quest else 404, quest or {'error': 'Quest not found'})
-                    return
-                payload = self.read_json()
-                if type(payload.get('completed')) is not bool:
-                    raise ValueError('completed must be a boolean')
-                with connect() as db:
-                    quest = db.execute(
-                        'UPDATE quests SET completed = %s WHERE id = %s RETURNING *',
-                        (payload['completed'], quest_id),
-                    ).fetchone()
-                self.send_json(200 if quest else 404, quest or {'error': 'Quest not found'})
-                return
-            self.send_json(404, {'error': 'Not found'})
-        except (ValueError, UnicodeDecodeError) as error:
-            self.send_json(400, {'error': str(error)})
-        except psycopg.Error:
-           
-            self.send_json(503, {'error': 'Database temporarily unavailable'})
+    def execute():
+        with request.app[ENGINE].begin() as connection:
+            existing(connection, TABLES[parent], identifier)
+            table = TABLES[child]
+            if request.method == 'GET':
+                rows = connection.execute(select(table).where(table.c[field] == identifier).order_by(table.c.id.desc())).mappings()
+                return response({child: [dict(row) for row in rows]})
+            row = dict(connection.execute(table.insert().values(**values).returning(table)).mappings().one())
+            return response(row, 201, {'Location': f'/api/{child}/{row["id"]}'})
 
-    def do_GET(self):
-        self.handle_api('GET')
-
-    def do_POST(self):
-        self.handle_api('POST')
-
-    def do_PATCH(self):
-        self.handle_api('PATCH')
-
-    def do_DELETE(self):
-        self.handle_api('DELETE')
+    return await asyncio.to_thread(execute)
 
 
-def main():
-    port = int(os.getenv('PORT', '8080'))
-    if not 1 <= port <= 65535:
-        raise SystemExit('PORT must be between 1 and 65535')
+async def health(request):
+    def check():
+        with request.app[ENGINE].connect() as connection:
+            connection.execute(text('SELECT 1'))
+    await asyncio.to_thread(check)
+    return response({'status': 'healthy', 'database': 'connected'})
+
+
+async def info(request):
+    return response({'app': os.getenv('APP_NAME', 'Study Quest'),
+                     'message': os.getenv('APP_MESSAGE', 'Turn study goals into completed quests.'),
+                     'hostname': socket.gethostname()})
+
+
+async def page(request):
+    return web.FileResponse(BASE / 'index.html')
+
+
+async def test_page(request):
+    return response({'title': 'New page', 'message': 'I get it'})
+
+
+def database_url():
+    if os.getenv('DATABASE_URL'):
+        return os.environ['DATABASE_URL']
+    if os.getenv('DB_HOST'):
+        return URL.create('postgresql+psycopg', username=os.environ['DB_USER'],
+                          password=os.environ['DB_PASSWORD'], host=os.environ['DB_HOST'],
+                          port=int(os.getenv('DB_PORT', '5432')), database=os.environ['DB_NAME'])
+    data = BASE / 'instance'
+    data.mkdir(exist_ok=True)
+    return URL.create('sqlite', database=str(data / 'study_quest.db'))
+
+
+def create_app(url=None):
+    engine = create_engine(url if url is not None else database_url(), pool_pre_ping=True)
+    if engine.dialect.name == 'sqlite':
+        @event.listens_for(engine, 'connect')
+        def sqlite_foreign_keys(connection, _):
+            connection.execute('PRAGMA foreign_keys=ON')
     try:
-        initialize_database()
-    except psycopg.Error:
-        raise SystemExit('Database initialization failed; check configuration and readiness.') from None
-    host = os.getenv('HOST', '0.0.0.0')
-    server = ThreadingHTTPServer((host, port), RequestHandler)
-    print(f'Listening on http://{host}:{port}', flush=True)
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        server.server_close()
+        metadata.create_all(engine)
+        # Add the new optional relationship without replacing legacy quests.
+        if 'course_id' not in {c['name'] for c in inspect(engine).get_columns('quests')}:
+            with engine.begin() as connection:
+                connection.execute(text('ALTER TABLE quests ADD COLUMN course_id BIGINT REFERENCES courses(id) ON DELETE RESTRICT'))
+                connection.execute(text('CREATE INDEX IF NOT EXISTS ix_quests_course_id ON quests(course_id)'))
+    except Exception:
+        engine.dispose()
+        raise
+    app = web.Application(middlewares=[errors], client_max_size=8192)
+    app[ENGINE] = engine
+    app.router.add_get('/', page)
+    app.router.add_get('/health', health)
+    app.router.add_get('/api/info', info)
+    app.router.add_get('/Test', test_page)
+    for resource in TABLES:
+        # Fixed resource names prevent user input from selecting arbitrary tables.
+        pattern = '{resource:' + resource + '}'
+        app.router.add_get('/api/' + pattern, crud)
+        app.router.add_post('/api/' + pattern, crud)
+        for method in ('GET', 'PATCH', 'DELETE'):
+            app.router.add_route(method, '/api/' + pattern + '/{id}', crud)
+    for parent, child in (('courses', 'quests'), ('quests', 'steps')):
+        path = '/api/{parent:' + parent + '}/{id}/{child:' + child + '}'
+        app.router.add_get(path, related)
+        app.router.add_post(path, related)
+
+    async def cleanup(application):
+        application[ENGINE].dispose()
+    app.on_cleanup.append(cleanup)
+    return app
 
 
 if __name__ == '__main__':
-    main()
+    port = int(os.getenv('PORT', '8080'))
+    if not 1 <= port <= 65535:
+        raise SystemExit('PORT must be between 1 and 65535')
+    web.run_app(create_app(), host=os.getenv('HOST', '0.0.0.0'), port=port)

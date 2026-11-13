@@ -1,111 +1,102 @@
-﻿# Study Quest — Docker Compose application
+# Study Quest
 
-A study-goal tracker: add quests, list them, and mark them complete. The Python
-backend reads and writes PostgreSQL data; the browser page uses the same JSON API.
+REST API and study-goal tracker built with Python 3.12, aiohttp, SQLAlchemy,
+and PostgreSQL 17. Courses contain quests; quests contain steps. The existing
+browser page creates, lists, and completes quests.
 
-Complete endpoint reference and Postman instructions: [API.md](API.md).
-Importable requests and automated assertions:
-[Postman Collection](postman/StudyQuest.postman_collection.json).
+## Run with Docker
 
-## Start
-
-Start Docker Desktop (Linux containers) and open a terminal **in the inner
-`Webproject` folder containing `compose.yaml`**.
-
-On a fresh checkout, create your local configuration (CMD or PowerShell):
-
-```cmd
-copy .env.example .env
-```
-
-Edit `.env` and replace `POSTGRES_PASSWORD` with your own random password.
-The local `.env` is ignored by Git and excluded from the Docker build context.
-If a locally generated `.env` already exists, keep it instead of overwriting it.
-
-```cmd
-docker compose up
-```
-
-Open http://localhost:8080. Compose builds the backend automatically on first use.
-For background mode use `docker compose up -d --build`; after code changes rebuild
-with that command. If port 8080 is occupied, change `APP_PORT` in `.env`.
-
-## Services and configuration
-
-| Component | Configuration |
-| --- | --- |
-| `backend` | Custom Python 3.12 image, non-root user, HTTP port 8080 |
-| `db` | PostgreSQL 17, internal port 5432, no host port published |
-| Network | Both services join `app-network`; backend connects to hostname `db` |
-| Startup | Database healthcheck must pass before backend starts; table is created automatically |
-| Storage | Named volume `postgres-data` mounted at `/var/lib/postgresql/data` |
-| Health | `/health` runs `SELECT 1`; backend image healthcheck calls this endpoint |
-
-Compose reads `.env`: `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`,
-`APP_PORT`, `APP_NAME`, and `APP_MESSAGE`. It passes database settings to the
-backend as `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD`.
-Required database settings have no fallback credentials. Never commit `.env`.
-PostgreSQL initialization variables apply to a **new, empty volume**; changing
-these later does not update existing database accounts.
-
-## API examples (PowerShell)
+Start Docker Desktop using Linux containers. From this directory:
 
 ```powershell
-# Write a study goal to PostgreSQL (HTTP 201).
-$quest = Invoke-RestMethod http://localhost:8080/api/quests -Method Post -ContentType 'application/json' -Body '{"title":"Learn Docker Compose","subject":"DevOps"}'
-
-# Read stored goals (HTTP 200).
-Invoke-RestMethod http://localhost:8080/api/quests | ConvertTo-Json -Depth 5
-
-# Update the saved goal (HTTP 200).
-Invoke-RestMethod "http://localhost:8080/api/quests/$($quest.id)" -Method Patch -ContentType 'application/json' -Body '{"completed":true}'
-
-# Get one goal by ID (HTTP 200).
-Invoke-RestMethod "http://localhost:8080/api/quests/$($quest.id)"
-
-# Delete that goal (HTTP 200); subsequent reads return 404.
-Invoke-RestMethod "http://localhost:8080/api/quests/$($quest.id)" -Method Delete
-
-Invoke-RestMethod http://localhost:8080/health
+Copy-Item .env.example .env
 ```
 
-`POST /api/quests` requires a nonblank `title` (up to 120 characters) and
-`subject` (up to 60). `PATCH /api/quests/{id}` requires a boolean `completed`.
-Invalid input returns 400, missing routes/quests 404, and database failures 503.
-SQL uses bound parameters. `/api/info` exposes the application name and message.
+If `.env` already exists, keep it. Set your own `POSTGRES_PASSWORD`, then run:
 
-## Verify persistence
+```powershell
+docker compose up -d --build --wait
+```
 
-After adding a quest, run:
+Open http://localhost:8080. If that port is occupied, change `APP_PORT` in `.env`
+and use the same port in Postman's `baseUrl`.
 
-```cmd
+Compose runs the backend and PostgreSQL on a private network. PostgreSQL is
+available to the backend as `db:5432`; it does not publish a host port. Tables
+are created automatically. Existing quests are retained and receive a nullable
+`course_id` column. Database data is stored in the `postgres-data` named volume.
+
+```powershell
+docker compose ps
+docker compose logs backend
 docker compose down
-docker compose up -d
 ```
 
-Refresh the page or repeat `GET /api/quests`: the same quest and completion state
-remain. `down` removes containers and the network while retaining the named volume.
-`docker compose stop` also retains data; resume with `docker compose up -d`.
-**Do not use `docker compose down -v` unless you intend to delete the database.**
+`down` preserves the database. `down -v` deletes it. Existing database credentials
+are stored in the volume; editing `.env` does not change those accounts.
 
-## Check and stop
+## Run locally without Docker
 
-To repeat the API and persistence checks in PowerShell:
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe app.py
+```
+
+With no database environment variables, this uses SQLite at
+`instance/study_quest.db`. SQLite is relational and enforces foreign keys.
+Set `DATABASE_URL` to a SQLAlchemy URL to choose a different database, for example
+`postgresql+psycopg://user:password@localhost:5432/study_quest`.
+Alternatively set `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD`,
+as Compose does. `HOST` defaults to `0.0.0.0`; `PORT` defaults to `8080`.
+
+## Use the API
+
+Full endpoint, validation, and response reference: [API.md](API.md).
+
+```powershell
+$course = Invoke-RestMethod http://localhost:8080/api/courses -Method Post -ContentType application/json -Body '{"name":"Web Development"}'
+$quest = Invoke-RestMethod "http://localhost:8080/api/courses/$($course.id)/quests" -Method Post -ContentType application/json -Body '{"title":"Build REST API","subject":"Backend"}'
+$step = Invoke-RestMethod "http://localhost:8080/api/quests/$($quest.id)/steps" -Method Post -ContentType application/json -Body '{"title":"Document endpoints"}'
+Invoke-RestMethod "http://localhost:8080/api/steps/$($step.id)" -Method Patch -ContentType application/json -Body '{"completed":true}'
+Invoke-RestMethod "http://localhost:8080/api/courses/$($course.id)/quests"
+```
+
+Delete steps before their quest, and quests before their course. Deleting a
+parent with dependent records returns `409`. A quest may have no course, allowing
+the existing page to work. Quest and step completion are independent flags.
+
+## Postman and tests
+
+Import both files into Postman:
+
+- [StudyQuest.postman_collection.json](postman/StudyQuest.postman_collection.json)
+- [StudyQuest.local.postman_environment.json](postman/StudyQuest.local.postman_environment.json)
+
+Select **Study Quest - Local**, then run the entire collection in order using
+Collection Runner. The collection covers every JSON endpoint, validates related
+data and errors, and removes its temporary records in dependency order.
+
+With Node.js installed, the same collection runs from a terminal:
+
+```powershell
+npx --yes newman run postman/StudyQuest.postman_collection.json -e postman/StudyQuest.local.postman_environment.json
+```
+
+Run HTTP integration tests against isolated temporary SQLite databases:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+```
+
+These tests include relationship constraints, updates, legacy migration, and
+persistence after application restart. To verify PostgreSQL persistence by
+recreating the Compose containers:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\verify.ps1
 ```
 
-The script creates one demonstration quest, checks invalid inputs, recreates the
-containers with `down` / `up`, verifies the saved quest, then deletes that test quest
-and checks the resulting 404 responses. It leaves the app running.
-
-```cmd
-docker compose ps
-docker compose logs backend
-docker compose logs db
-docker compose down
-```
-
-Configuration reference: [Compose startup order and database readiness](https://docs.docker.com/compose/how-tos/startup-order/).
-Database adapter: [Psycopg on PyPI](https://pypi.org/project/psycopg/).
+That script leaves one demonstration quest in the database. Historical
+SpaceBounty files are unrelated to this Study Quest API; use the StudyQuest
+collection above.

@@ -1,0 +1,37 @@
+{
+  "target": "http://localhost:8080",
+  "backend": "aiohttp 3.14.5 / SQLAlchemy 2.1.6",
+  "database": "SQLite (real persistent database, not a mock)",
+  "run_started_at": 1794566669963,
+  "run_completed_at": 1794566675404,
+  "runner": "Newman 6.2.3",
+  "requests": {
+    "total": 58,
+    "pending": 0,
+    "failed": 0
+  },
+  "assertions": {
+    "total": 123,
+    "pending": 0,
+    "failed": 0
+  },
+  "failures": 0,
+  "http_integration_tests": {
+    "total": 6,
+    "failed": 0,
+    "command": "python -m unittest discover -s tests -v"
+  },
+  "coverage": [
+    "All 23 documented method/URL pairs",
+    "Related-data reads and writes",
+    "Validation and HTTP errors",
+    "Foreign keys enforced by SQLite",
+    "Persistence after application restart",
+    "Legacy quest table migration"
+  ],
+  "not_verified": [
+    "Docker Compose runtime",
+    "PostgreSQL runtime and container recreation"
+  ],
+  "limitations": "Docker daemon unavailable; online pip installation blocked in this session. Tests used existing local Python dependencies and cached Newman."
+}

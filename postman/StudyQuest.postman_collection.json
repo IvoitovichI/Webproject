@@ -1,25 +1,23 @@
 {
   "info": {
-    "name": "Study Quest - complete API",
-    "_postman_id": "c1e37e0a-0e86-4c30-9f87-71c2caec5d82",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Run the entire collection in order against the running Study Quest app. Creates and deletes only its own test quest. baseUrl defaults to localhost:8080; override for APP_PORT. questId is saved automatically after creation. Includes every endpoint and validation checks."
+    "name": "Study Quest REST API",
+    "description": "Run all requests in order. Covers every endpoint and negative cases. Creates temporary course/quests/steps and deletes them in dependency order. Existing data is preserved. See API.md.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost:8080",
-      "type": "string"
+      "value": "http://localhost:8080"
     }
   ],
   "item": [
     {
-      "name": "01 - Browser page",
+      "name": "Browser page",
       "request": {
         "method": "GET",
         "header": [],
         "url": "{{baseUrl}}/",
-        "description": "01 - Browser page"
+        "description": "GET /; expected HTTP 200. See API.md for field constraints and response schemas."
       },
       "event": [
         {
@@ -27,20 +25,20 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
-              "pm.test(\"Study Quest form\", function () { pm.expect(pm.response.text()).to.include(\"quest-form\"); });"
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('HTML study form', () => { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); pm.expect(pm.response.text()).to.include('quest-form'); });"
             ]
           }
         }
       ]
     },
     {
-      "name": "02 - Database health",
+      "name": "Database health",
       "request": {
         "method": "GET",
         "header": [],
         "url": "{{baseUrl}}/health",
-        "description": "02 - Database health"
+        "description": "GET /health; expected HTTP 200. See API.md for field constraints and response schemas."
       },
       "event": [
         {
@@ -48,20 +46,21 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
-              "pm.test(\"Database connected\", function () { pm.expect(pm.response.json().database).to.eql(\"connected\"); });"
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('Database connected', () => pm.expect(apiResponse.database).to.equal('connected'));"
             ]
           }
         }
       ]
     },
     {
-      "name": "03 - Application info",
+      "name": "Application info",
       "request": {
         "method": "GET",
         "header": [],
         "url": "{{baseUrl}}/api/info",
-        "description": "03 - Application info"
+        "description": "GET /api/info; expected HTTP 200. See API.md for field constraints and response schemas."
       },
       "event": [
         {
@@ -69,20 +68,65 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
-              "pm.test(\"Configured app\", function () { pm.expect(pm.response.json().app).to.be.a(\"string\").and.not.empty; });"
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('Application name', () => pm.expect(apiResponse.app).to.be.a('string').and.not.empty);"
             ]
           }
         }
       ]
     },
     {
-      "name": "04 - List quests",
+      "name": "Existing demonstration route",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/Test",
+        "description": "GET /Test; expected HTTP 200. See API.md for field constraints and response schemas."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('Demo response', () => pm.expect(apiResponse.title).to.equal('New page'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List courses",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/courses",
+        "description": "GET /api/courses; expected HTTP 200. See API.md for field constraints and response schemas."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('List envelope', () => pm.expect(apiResponse.courses).to.be.an('array'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List quests",
       "request": {
         "method": "GET",
         "header": [],
         "url": "{{baseUrl}}/api/quests",
-        "description": "04 - List quests"
+        "description": "GET /api/quests; expected HTTP 200. See API.md for field constraints and response schemas."
       },
       "event": [
         {
@@ -90,15 +134,38 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
-              "pm.test(\"Quests array\", function () { pm.expect(pm.response.json().quests).to.be.an(\"array\"); });"
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('List envelope', () => pm.expect(apiResponse.quests).to.be.an('array'));"
             ]
           }
         }
       ]
     },
     {
-      "name": "05 - Create test quest",
+      "name": "List steps",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/steps",
+        "description": "GET /api/steps; expected HTTP 200. See API.md for field constraints and response schemas."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('List envelope', () => pm.expect(apiResponse.steps).to.be.an('array'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create course",
       "request": {
         "method": "POST",
         "header": [
@@ -107,11 +174,11 @@
             "value": "application/json"
           }
         ],
-        "url": "{{baseUrl}}/api/quests",
-        "description": "05 - Create test quest",
+        "url": "{{baseUrl}}/api/courses",
+        "description": "POST /api/courses; expected HTTP 201. See API.md for field constraints and response schemas.",
         "body": {
           "mode": "raw",
-          "raw": "{\"title\": \"{{testTitle}}\", \"subject\": \"Postman verification\"}",
+          "raw": "{\"name\": \"Postman course\", \"description\": \"Temporary API test\"}",
           "options": {
             "raw": {
               "language": "json"
@@ -121,34 +188,146 @@
       },
       "event": [
         {
-          "listen": "prerequest",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.collectionVariables.unset(\"questId\");",
-              "pm.collectionVariables.set(\"testTitle\", \"Postman quest \" + pm.variables.replaceIn(\"{{$guid}}\"));"
-            ]
-          }
-        },
-        {
           "listen": "test",
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
-              "pm.test(\"Created quest fields\", function () { const q = pm.response.json(); pm.expect(q.id).to.be.a(\"number\").above(0); pm.expect(q.title).to.eql(pm.collectionVariables.get(\"testTitle\")); pm.expect(q.subject).to.eql(\"Postman verification\"); pm.expect(q.completed).to.eql(false); pm.expect(q.created_at).to.be.a(\"string\"); pm.collectionVariables.set(\"questId\", String(q.id)); });"
+              "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+              "const apiResponse = pm.response.json();",
+              "pm.collectionVariables.set('courseId', apiResponse.id);",
+              "pm.test('Generated ID and timestamp', () => { pm.expect(apiResponse.id).to.be.a('number').above(0); pm.expect(Number.isNaN(Date.parse(apiResponse.created_at))).to.equal(false); });",
+              "pm.test('Location', () => pm.expect(pm.response.headers.get('Location')).to.match(new RegExp('/'+apiResponse.id+'$')));"
             ]
           }
         }
       ]
     },
     {
-      "name": "06 - Get quest by ID",
+      "name": "Read course",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/courses/{{courseId}}",
+        "description": "GET /api/courses/{{courseId}}; expected HTTP 200. See API.md for field constraints and response schemas."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('Saved name', () => pm.expect(apiResponse.name).to.equal('Postman course'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Update course",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/courses/{{courseId}}",
+        "description": "PATCH /api/courses/{{courseId}}; expected HTTP 200. See API.md for field constraints and response schemas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"name\": \"REST APIs\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('Partial update preserves description', () => { pm.expect(apiResponse.name).to.equal('REST APIs'); pm.expect(apiResponse.description).to.equal('Temporary API test'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Course starts empty",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/courses/{{courseId}}/quests",
+        "description": "GET /api/courses/{{courseId}}/quests; expected HTTP 200. See API.md for field constraints and response schemas."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('No quests yet', () => pm.expect(apiResponse.quests).to.eql([]));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create related quest",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/courses/{{courseId}}/quests",
+        "description": "POST /api/courses/{{courseId}}/quests; expected HTTP 201. See API.md for field constraints and response schemas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"title\": \"Build API\", \"subject\": \"Web\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+              "const apiResponse = pm.response.json();",
+              "pm.collectionVariables.set('questId', apiResponse.id);",
+              "pm.test('Generated ID and timestamp', () => { pm.expect(apiResponse.id).to.be.a('number').above(0); pm.expect(Number.isNaN(Date.parse(apiResponse.created_at))).to.equal(false); });",
+              "pm.test('Location', () => pm.expect(pm.response.headers.get('Location')).to.match(new RegExp('/'+apiResponse.id+'$')));",
+              "pm.test('Course relationship', () => pm.expect(apiResponse.course_id).to.equal(Number(pm.collectionVariables.get('courseId'))));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Read quest",
       "request": {
         "method": "GET",
         "header": [],
         "url": "{{baseUrl}}/api/quests/{{questId}}",
-        "description": "06 - Get quest by ID"
+        "description": "GET /api/quests/{{questId}}; expected HTTP 200. See API.md for field constraints and response schemas."
       },
       "event": [
         {
@@ -156,36 +335,17 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
-              "pm.test(\"Same quest\", function () { pm.expect(String(pm.response.json().id)).to.eql(pm.collectionVariables.get(\"questId\")); pm.expect(pm.response.json().title).to.eql(pm.collectionVariables.get(\"testTitle\")); });"
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('Initially incomplete', () => pm.expect(apiResponse.completed).to.equal(false));",
+              "pm.collectionVariables.set('questCreatedAt', apiResponse.created_at);"
             ]
           }
         }
       ]
     },
     {
-      "name": "07 - List includes created quest",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": "{{baseUrl}}/api/quests",
-        "description": "07 - List includes created quest"
-      },
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
-              "pm.test(\"Created quest listed\", function () { pm.expect(pm.response.json().quests.some(q => String(q.id) === pm.collectionVariables.get(\"questId\"))).to.eql(true); });"
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "08 - Update completion",
+      "name": "Update quest",
       "request": {
         "method": "PATCH",
         "header": [
@@ -195,7 +355,7 @@
           }
         ],
         "url": "{{baseUrl}}/api/quests/{{questId}}",
-        "description": "08 - Update completion",
+        "description": "PATCH /api/quests/{{questId}}; expected HTTP 200. See API.md for field constraints and response schemas.",
         "body": {
           "mode": "raw",
           "raw": "{\"completed\": true}",
@@ -212,20 +372,260 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
-              "pm.test(\"Updated quest\", function () { pm.expect(String(pm.response.json().id)).to.eql(pm.collectionVariables.get(\"questId\")); pm.expect(pm.response.json().completed).to.eql(true); });"
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('Partial update persisted', () => { pm.expect(apiResponse.completed).to.equal(true); pm.expect(apiResponse.title).to.equal('Build API'); pm.expect(apiResponse.created_at).to.equal(pm.collectionVariables.get('questCreatedAt')); });"
             ]
           }
         }
       ]
     },
     {
-      "name": "09 - Read persisted update",
+      "name": "List course quests",
       "request": {
         "method": "GET",
         "header": [],
+        "url": "{{baseUrl}}/api/courses/{{courseId}}/quests",
+        "description": "GET /api/courses/{{courseId}}/quests; expected HTTP 200. See API.md for field constraints and response schemas."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('Exact relationship', () => pm.expect(apiResponse.quests.map(q=>q.id)).to.eql([Number(pm.collectionVariables.get('questId'))]));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create step through quest",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/quests/{{questId}}/steps",
+        "description": "POST /api/quests/{{questId}}/steps; expected HTTP 201. See API.md for field constraints and response schemas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"title\": \"Document endpoints\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+              "const apiResponse = pm.response.json();",
+              "pm.collectionVariables.set('stepId', apiResponse.id);",
+              "pm.test('Generated ID and timestamp', () => { pm.expect(apiResponse.id).to.be.a('number').above(0); pm.expect(Number.isNaN(Date.parse(apiResponse.created_at))).to.equal(false); });",
+              "pm.test('Location', () => pm.expect(pm.response.headers.get('Location')).to.match(new RegExp('/'+apiResponse.id+'$')));",
+              "pm.test('Quest relationship', () => pm.expect(apiResponse.quest_id).to.equal(Number(pm.collectionVariables.get('questId'))));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Read step",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/steps/{{stepId}}",
+        "description": "GET /api/steps/{{stepId}}; expected HTTP 200. See API.md for field constraints and response schemas."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('Saved title', () => pm.expect(apiResponse.title).to.equal('Document endpoints'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Update step",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/steps/{{stepId}}",
+        "description": "PATCH /api/steps/{{stepId}}; expected HTTP 200. See API.md for field constraints and response schemas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"completed\": true}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('Step completion', () => { pm.expect(apiResponse.completed).to.equal(true); pm.expect(apiResponse.title).to.equal('Document endpoints'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List quest steps",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/quests/{{questId}}/steps",
+        "description": "GET /api/quests/{{questId}}/steps; expected HTTP 200. See API.md for field constraints and response schemas."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('Exact step relationship', () => pm.expect(apiResponse.steps.map(s=>s.id)).to.eql([Number(pm.collectionVariables.get('stepId'))]));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create standalone quest with reference",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/quests",
+        "description": "POST /api/quests; expected HTTP 201. See API.md for field constraints and response schemas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"title\":\"Second quest\",\"subject\":\"Web\",\"course_id\":{{courseId}}}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+              "const apiResponse = pm.response.json();",
+              "pm.collectionVariables.set('secondQuestId', apiResponse.id);",
+              "pm.test('Generated ID and timestamp', () => { pm.expect(apiResponse.id).to.be.a('number').above(0); pm.expect(Number.isNaN(Date.parse(apiResponse.created_at))).to.equal(false); });",
+              "pm.test('Location', () => pm.expect(pm.response.headers.get('Location')).to.match(new RegExp('/'+apiResponse.id+'$')));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create standalone step with reference",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/steps",
+        "description": "POST /api/steps; expected HTTP 201. See API.md for field constraints and response schemas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"title\":\"Second step\",\"quest_id\":{{secondQuestId}}}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+              "const apiResponse = pm.response.json();",
+              "pm.collectionVariables.set('secondStepId', apiResponse.id);",
+              "pm.test('Generated ID and timestamp', () => { pm.expect(apiResponse.id).to.be.a('number').above(0); pm.expect(Number.isNaN(Date.parse(apiResponse.created_at))).to.equal(false); });",
+              "pm.test('Location', () => pm.expect(pm.response.headers.get('Location')).to.match(new RegExp('/'+apiResponse.id+'$')));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Prevent deleting nonempty course",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": "{{baseUrl}}/api/courses/{{courseId}}",
+        "description": "DELETE /api/courses/{{courseId}}; expected HTTP 409. See API.md for field constraints and response schemas."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Prevent deleting nonempty quest",
+      "request": {
+        "method": "DELETE",
+        "header": [],
         "url": "{{baseUrl}}/api/quests/{{questId}}",
-        "description": "09 - Read persisted update"
+        "description": "DELETE /api/quests/{{questId}}; expected HTTP 409. See API.md for field constraints and response schemas."
       },
       "event": [
         {
@@ -233,15 +633,16 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
-              "pm.test(\"Completion saved\", function () { pm.expect(pm.response.json().completed).to.eql(true); });"
+              "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
             ]
           }
         }
       ]
     },
     {
-      "name": "Validation - Blank title",
+      "name": "Blank course name",
       "request": {
         "method": "POST",
         "header": [
@@ -250,11 +651,11 @@
             "value": "application/json"
           }
         ],
-        "url": "{{baseUrl}}/api/quests",
-        "description": "Validation - Blank title",
+        "url": "{{baseUrl}}/api/courses",
+        "description": "POST /api/courses; expected HTTP 400. See API.md for field constraints and response schemas.",
         "body": {
           "mode": "raw",
-          "raw": "{\"title\": \" \", \"subject\": \"Docker\"}",
+          "raw": "{\"name\": \" \"}",
           "options": {
             "raw": {
               "language": "json"
@@ -268,15 +669,16 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
-              "pm.test(\"Error message\", function () { pm.expect(pm.response.json().error).to.be.a(\"string\"); });"
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
             ]
           }
         }
       ]
     },
     {
-      "name": "Validation - Missing subject",
+      "name": "Long course name",
       "request": {
         "method": "POST",
         "header": [
@@ -285,11 +687,11 @@
             "value": "application/json"
           }
         ],
-        "url": "{{baseUrl}}/api/quests",
-        "description": "Validation - Missing subject",
+        "url": "{{baseUrl}}/api/courses",
+        "description": "POST /api/courses; expected HTTP 400. See API.md for field constraints and response schemas.",
         "body": {
           "mode": "raw",
-          "raw": "{\"title\": \"Invalid quest\"}",
+          "raw": "{\"name\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}",
           "options": {
             "raw": {
               "language": "json"
@@ -303,15 +705,16 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
-              "pm.test(\"Error message\", function () { pm.expect(pm.response.json().error).to.be.a(\"string\"); });"
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
             ]
           }
         }
       ]
     },
     {
-      "name": "Validation - Invalid JSON",
+      "name": "Missing subject",
       "request": {
         "method": "POST",
         "header": [
@@ -321,10 +724,10 @@
           }
         ],
         "url": "{{baseUrl}}/api/quests",
-        "description": "Validation - Invalid JSON",
+        "description": "POST /api/quests; expected HTTP 400. See API.md for field constraints and response schemas.",
         "body": {
           "mode": "raw",
-          "raw": "{invalid",
+          "raw": "{\"title\": \"Missing\"}",
           "options": {
             "raw": {
               "language": "json"
@@ -338,15 +741,16 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
-              "pm.test(\"Error message\", function () { pm.expect(pm.response.json().error).to.be.a(\"string\"); });"
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
             ]
           }
         }
       ]
     },
     {
-      "name": "Validation - Wrong completion type",
+      "name": "Invalid boolean",
       "request": {
         "method": "PATCH",
         "header": [
@@ -356,10 +760,10 @@
           }
         ],
         "url": "{{baseUrl}}/api/quests/{{questId}}",
-        "description": "Validation - Wrong completion type",
+        "description": "PATCH /api/quests/{{questId}}; expected HTTP 400. See API.md for field constraints and response schemas.",
         "body": {
           "mode": "raw",
-          "raw": "{\"completed\": \"yes\"}",
+          "raw": "{\"completed\": \"true\"}",
           "options": {
             "raw": {
               "language": "json"
@@ -373,20 +777,417 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
-              "pm.test(\"Error message\", function () { pm.expect(pm.response.json().error).to.be.a(\"string\"); });"
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
             ]
           }
         }
       ]
     },
     {
-      "name": "Validation - Invalid ID",
+      "name": "Unknown field",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/steps/{{stepId}}",
+        "description": "PATCH /api/steps/{{stepId}}; expected HTTP 400. See API.md for field constraints and response schemas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"unknown\": 1}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Empty update",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/courses/{{courseId}}",
+        "description": "PATCH /api/courses/{{courseId}}; expected HTTP 400. See API.md for field constraints and response schemas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Read-only timestamp",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/quests/{{questId}}",
+        "description": "PATCH /api/quests/{{questId}}; expected HTTP 400. See API.md for field constraints and response schemas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"created_at\": \"2000-01-01\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Missing course reference",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/quests",
+        "description": "POST /api/quests; expected HTTP 400. See API.md for field constraints and response schemas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"title\": \"Invalid\", \"subject\": \"Web\", \"course_id\": 9223372036854775807}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Missing quest reference",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/steps",
+        "description": "POST /api/steps; expected HTTP 400. See API.md for field constraints and response schemas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"title\": \"Invalid\", \"quest_id\": 9223372036854775807}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Boolean reference",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/steps",
+        "description": "POST /api/steps; expected HTTP 400. See API.md for field constraints and response schemas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"title\": \"Invalid\", \"quest_id\": true}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Nested reference supplied by URL",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/quests/{{questId}}/steps",
+        "description": "POST /api/quests/{{questId}}/steps; expected HTTP 400. See API.md for field constraints and response schemas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"title\": \"Invalid\", \"quest_id\": 1}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Array body",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/courses",
+        "description": "POST /api/courses; expected HTTP 400. See API.md for field constraints and response schemas.",
+        "body": {
+          "mode": "raw",
+          "raw": "[]",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Malformed JSON",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/courses",
+        "description": "POST /api/courses; expected HTTP 400. See API.md for field constraints and response schemas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{broken",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Wrong content type",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "text/plain"
+          }
+        ],
+        "url": "{{baseUrl}}/api/courses",
+        "description": "POST /api/courses; expected HTTP 400. See API.md for field constraints and response schemas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Oversized JSON",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/courses",
+        "description": "POST /api/courses; expected HTTP 413. See API.md for field constraints and response schemas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"name\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 413', () => pm.response.to.have.status(413));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Invalid identifier 0",
       "request": {
         "method": "GET",
         "header": [],
         "url": "{{baseUrl}}/api/quests/0",
-        "description": "Validation - Invalid ID"
+        "description": "GET /api/quests/0; expected HTTP 400. See API.md for field constraints and response schemas."
       },
       "event": [
         {
@@ -394,62 +1195,21 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
-              "pm.test(\"Error message\", function () { pm.expect(pm.response.json().error).to.be.a(\"string\"); });"
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
             ]
           }
         }
       ]
     },
     {
-      "name": "Validation - Invalid delete ID",
-      "request": {
-        "method": "DELETE",
-        "header": [],
-        "url": "{{baseUrl}}/api/quests/not-a-number",
-        "description": "Validation - Invalid delete ID"
-      },
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
-              "pm.test(\"Error message\", function () { pm.expect(pm.response.json().error).to.be.a(\"string\"); });"
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "10 - Delete test quest",
-      "request": {
-        "method": "DELETE",
-        "header": [],
-        "url": "{{baseUrl}}/api/quests/{{questId}}",
-        "description": "10 - Delete test quest"
-      },
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
-              "pm.test(\"Deleted own quest\", function () { pm.expect(String(pm.response.json().id)).to.eql(pm.collectionVariables.get(\"questId\")); });"
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "11 - Deleted quest returns 404",
+      "name": "Invalid identifier -1",
       "request": {
         "method": "GET",
         "header": [],
-        "url": "{{baseUrl}}/api/quests/{{questId}}",
-        "description": "11 - Deleted quest returns 404"
+        "url": "{{baseUrl}}/api/quests/-1",
+        "description": "GET /api/quests/-1; expected HTTP 400. See API.md for field constraints and response schemas."
       },
       "event": [
         {
@@ -457,27 +1217,139 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });"
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
             ]
           }
         }
       ]
     },
     {
-      "name": "12 - Updating deleted quest returns 404",
+      "name": "Invalid identifier abc",
       "request": {
-        "method": "PATCH",
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/quests/abc",
+        "description": "GET /api/quests/abc; expected HTTP 400. See API.md for field constraints and response schemas."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Invalid identifier 9223372036854775808",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/quests/9223372036854775808",
+        "description": "GET /api/quests/9223372036854775808; expected HTTP 400. See API.md for field constraints and response schemas."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Missing resource",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/courses/9223372036854775807",
+        "description": "GET /api/courses/9223372036854775807; expected HTTP 404. See API.md for field constraints and response schemas."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Missing related parent",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/quests/9223372036854775807/steps",
+        "description": "GET /api/quests/9223372036854775807/steps; expected HTTP 404. See API.md for field constraints and response schemas."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Unsupported query",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/quests?unknown=1",
+        "description": "GET /api/quests?unknown=1; expected HTTP 400. See API.md for field constraints and response schemas."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Unsupported method",
+      "request": {
+        "method": "PUT",
         "header": [
           {
             "key": "Content-Type",
             "value": "application/json"
           }
         ],
-        "url": "{{baseUrl}}/api/quests/{{questId}}",
-        "description": "12 - Updating deleted quest returns 404",
+        "url": "{{baseUrl}}/api/courses/{{courseId}}",
+        "description": "PUT /api/courses/{{courseId}}; expected HTTP 405. See API.md for field constraints and response schemas.",
         "body": {
           "mode": "raw",
-          "raw": "{\"completed\": false}",
+          "raw": "{}",
           "options": {
             "raw": {
               "language": "json"
@@ -491,19 +1363,131 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });"
+              "pm.test('HTTP 405', () => pm.response.to.have.status(405));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
             ]
           }
         }
       ]
     },
     {
-      "name": "13 - Repeated delete returns 404",
+      "name": "Unknown route",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/unknown",
+        "description": "GET /api/unknown; expected HTTP 404. See API.md for field constraints and response schemas."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delete temporary stepId",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": "{{baseUrl}}/api/steps/{{stepId}}",
+        "description": "DELETE /api/steps/{{stepId}}; expected HTTP 200. See API.md for field constraints and response schemas."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('Deleted ID', () => pm.expect(apiResponse.id).to.equal(Number(pm.collectionVariables.get('stepId'))));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Confirm deletion of stepId",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/steps/{{stepId}}",
+        "description": "GET /api/steps/{{stepId}}; expected HTTP 404. See API.md for field constraints and response schemas."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delete temporary secondStepId",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": "{{baseUrl}}/api/steps/{{secondStepId}}",
+        "description": "DELETE /api/steps/{{secondStepId}}; expected HTTP 200. See API.md for field constraints and response schemas."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('Deleted ID', () => pm.expect(apiResponse.id).to.equal(Number(pm.collectionVariables.get('secondStepId'))));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Confirm deletion of secondStepId",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/steps/{{secondStepId}}",
+        "description": "GET /api/steps/{{secondStepId}}; expected HTTP 404. See API.md for field constraints and response schemas."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delete temporary questId",
       "request": {
         "method": "DELETE",
         "header": [],
         "url": "{{baseUrl}}/api/quests/{{questId}}",
-        "description": "13 - Repeated delete returns 404"
+        "description": "DELETE /api/quests/{{questId}}; expected HTTP 200. See API.md for field constraints and response schemas."
       },
       "event": [
         {
@@ -511,19 +1495,21 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });"
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('Deleted ID', () => pm.expect(apiResponse.id).to.equal(Number(pm.collectionVariables.get('questId'))));"
             ]
           }
         }
       ]
     },
     {
-      "name": "14 - List excludes deleted quest",
+      "name": "Confirm deletion of questId",
       "request": {
         "method": "GET",
         "header": [],
-        "url": "{{baseUrl}}/api/quests",
-        "description": "14 - List excludes deleted quest"
+        "url": "{{baseUrl}}/api/quests/{{questId}}",
+        "description": "GET /api/quests/{{questId}}; expected HTTP 404. See API.md for field constraints and response schemas."
       },
       "event": [
         {
@@ -531,20 +1517,21 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
-              "pm.test(\"Deleted quest absent\", function () { pm.expect(pm.response.json().quests.some(q => String(q.id) === pm.collectionVariables.get(\"questId\"))).to.eql(false); });"
+              "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
             ]
           }
         }
       ]
     },
     {
-      "name": "15 - Unknown route",
+      "name": "Delete temporary secondQuestId",
       "request": {
-        "method": "GET",
+        "method": "DELETE",
         "header": [],
-        "url": "{{baseUrl}}/unknown",
-        "description": "15 - Unknown route"
+        "url": "{{baseUrl}}/api/quests/{{secondQuestId}}",
+        "description": "DELETE /api/quests/{{secondQuestId}}; expected HTTP 200. See API.md for field constraints and response schemas."
       },
       "event": [
         {
@@ -552,7 +1539,97 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });"
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('Deleted ID', () => pm.expect(apiResponse.id).to.equal(Number(pm.collectionVariables.get('secondQuestId'))));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Confirm deletion of secondQuestId",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/quests/{{secondQuestId}}",
+        "description": "GET /api/quests/{{secondQuestId}}; expected HTTP 404. See API.md for field constraints and response schemas."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delete temporary courseId",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": "{{baseUrl}}/api/courses/{{courseId}}",
+        "description": "DELETE /api/courses/{{courseId}}; expected HTTP 200. See API.md for field constraints and response schemas."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('Deleted ID', () => pm.expect(apiResponse.id).to.equal(Number(pm.collectionVariables.get('courseId'))));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Confirm deletion of courseId",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/courses/{{courseId}}",
+        "description": "GET /api/courses/{{courseId}}; expected HTTP 404. See API.md for field constraints and response schemas."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Repeat deletion",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": "{{baseUrl}}/api/courses/{{courseId}}",
+        "description": "DELETE /api/courses/{{courseId}}; expected HTTP 404. See API.md for field constraints and response schemas."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+              "const apiResponse = pm.response.json();",
+              "pm.test('JSON error', () => pm.expect(apiResponse.error).to.be.a('string').and.not.empty);"
             ]
           }
         }
